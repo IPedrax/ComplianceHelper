@@ -1,0 +1,13 @@
+.DS_Store
+Thumbs.db
+node_modules/
+
+# Local Claude Code state: never ship
+.claude/settings.local.json
+
+# Python build artifacts
+__pycache__/
+*.py[cod]
+
+# Scan output if you run the scanner on this repo
+.compliance/

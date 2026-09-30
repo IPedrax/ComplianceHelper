@@ -1,0 +1,19 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "compliance",
+  "owner": {
+    "name": "IPedrax",
+    "email": "pedro.medeiros@ipedrax.com.br"
+  },
+  "metadata": {
+    "description": "Compliance: build it compliant instead of finding the gaps in due diligence. A stdlib scanner for code and running apps, mapped to SOC 2, ISO 27001, OWASP, PCI DSS, GDPR, LGPD, CCPA, the EU AI Act and more, with hooks that re-check every edit."
+  },
+  "plugins": [
+    {
+      "name": "compliance",
+      "source": "./",
+      "category": "security",
+      "description": "Scans what Claude builds for compliance gaps and maps each finding to the frameworks it breaks. Hooks check every edit and re-scan the project when a turn ends: new critical or high issues make Claude fix them or tell you, and everything still open stays in front of you as a one-line warning. Invoke with /Compliance, or just build something."
+    }
+  ]
+}

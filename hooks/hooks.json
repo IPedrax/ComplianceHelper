@@ -1,0 +1,29 @@
+{
+  "description": "Compliance: checks each edit for compliance-breaking code and re-scans the project when a turn that changed code ends. Silent when clean; COMPLIANCE_DISABLE=1 turns it off.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/skills/Compliance/scripts/py.sh\" \"${CLAUDE_PLUGIN_ROOT}/skills/Compliance/scripts/hook.py\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/skills/Compliance/scripts/py.sh\" \"${CLAUDE_PLUGIN_ROOT}/skills/Compliance/scripts/hook.py\"",
+            "timeout": 90,
+            "statusMessage": "Compliance scan"
+          }
+        ]
+      }
+    ]
+  }
+}
