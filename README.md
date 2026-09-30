@@ -8,7 +8,7 @@ Most products meet compliance for the first time when someone else looks: an ent
 
 **Compliance** moves the check to the moment the code is written. After every edit, it looks at what Claude just wrote. When a turn ends, it re-scans the project, and anything new at critical or high severity makes Claude fix it or tell you about it before handing back control. Everything else still open stays in front of you as one warning line, until it's fixed or you accept the risk.
 
-It checks what a scanner can honestly check, and says so. SOC 2, ISO 27001 and GDPR also need policies, contracts and audits that live outside the code, so each report ends with the part that still needs a human. **It never calls a product compliant.**
+It checks what a scanner can honestly check, and says so. SOC 2, ISO 27001 and GDPR also need policies, contracts and audits that live outside the code, so each report ends with the part that still needs a human.
 
 Built for **Claude Code** (Windows / macOS / Linux). No dependencies: the scripts are stdlib Python 3.8+.
 
@@ -28,9 +28,9 @@ Reports go to `.compliance/report.md` inside the project, with a `.gitignore` of
 
 ## <img src="assets/icons/layers.svg" width="20" align="absmiddle" alt="" /> What it checks
 
-**Code, 33 line rules:** provider keys, JWTs (a Supabase `service_role` key is critical, an `anon` key is fine), hardcoded credentials, secrets that fall back to a default, secrets in `VITE_`/`NEXT_PUBLIC_` variables, disabled TLS checks, cleartext endpoints, MD5/SHA-1 passwords, predictable tokens, SQL and command injection, `eval`, raw HTML sinks, CORS with credentials, session cookie flags, debug mode, spoofable `X-Forwarded-For` client IPs, secrets in logs, personal data in URLs, raw card fields, hardcoded star ratings, pre-ticked consent boxes, accessibility (alt text, `lang`, zoom, keyboard access), secrets in Docker layers, deploys that never delete.
+**Code, 34 line rules:** provider keys, JWTs (a Supabase `service_role` key is critical, an `anon` key is fine), hardcoded credentials, secrets that fall back to a default, secrets in `VITE_`/`NEXT_PUBLIC_` variables, disabled TLS checks, cleartext endpoints, MD5/SHA-1 passwords, predictable tokens, SQL and command injection, `eval`, raw HTML sinks, CORS with credentials, session cookie flags, debug mode, spoofable `X-Forwarded-For` client IPs, secrets in logs, personal data in URLs, raw card fields, password forms sent with GET, hardcoded star ratings, pre-ticked consent boxes, accessibility (alt text, `lang`, zoom, keyboard access), secrets in Docker layers, deploys that never delete.
 
-**Project, 26 checks:** `.env` and key files exposed to git, Docker builds that ship `.env` or `.git`, nginx headers (including the `add_header`-inside-`location` inheritance trap), lockfiles, `security.txt`, trackers without consent, a privacy policy, account deletion and export, Do Not Sell or Share with Global Privacy Control, age gates, biometric consent, health data next to ad pixels, AI disclosure and labels, rate limits on paid AI calls, subscription cancellation, terms of sale, reporting for user content, SMS consent, unsubscribe links, and open-source licenses read from the lockfile.
+**Project, 28 checks:** `.env` and key files exposed to git, plaintext password storage, apps that set no security headers, Docker builds that ship `.env` or `.git`, nginx headers (including the `add_header`-inside-`location` inheritance trap), lockfiles, `security.txt`, trackers without consent, a privacy policy, account deletion and export, Do Not Sell or Share with Global Privacy Control, age gates, biometric consent, health data next to ad pixels, AI disclosure and labels, rate limits on paid AI calls, subscription cancellation, terms of sale, reporting for user content, SMS consent, unsubscribe links, and open-source licenses read from the lockfile.
 
 **Running app:** HTTPS and redirects, security headers, cookies set before consent, trackers with no consent manager, a privacy link, `lang`, alt text, zoom, mixed content, forms posting over HTTP, and probes for exposed `.env`, `.git`, keys, dumps and this report itself.
 
@@ -40,8 +40,9 @@ Reports go to `.compliance/report.md` inside the project, with a `.gitignore` of
 
 ## <img src="assets/icons/check.svg" width="20" align="absmiddle" alt="" /> What the testing found
 
-- **29 tests**, every rule proven both ways: it fires on the bad pattern and stays quiet on the safe version of it. The hooks are tested by feeding them the same JSON Claude Code sends. The app scanner is tested against a real local server. The fix recipes in `references/fixes.md` are tested against the scanner itself, so the skill never recommends a fix it would then flag.
+- **37 tests**, every rule proven both ways: it fires on the bad pattern and stays quiet on the safe version of it. The hooks are tested by feeding them the same JSON Claude Code sends. The app scanner is tested against a real local server. The fix recipes in `references/fixes.md` are tested against the scanner itself, so the skill never recommends a fix it would then flag.
 - **Calibrated on 14 real apps.** The first pass was noisy: "CVV" in comments, nginx `geolocation=()` headers read as location tracking, `.git` exclusions demanded where no `.git` existed. Fixing those cut high and medium findings from 111 to 40, and every issue that had already been found by hand was still caught.
+- **Smoke-tested by a fresh agent** that had only `SKILL.md` and a sample shop with planted problems. It took the shop from 16 open findings to 8 on its own, leaving the ones that needed the owner's decision, and its feedback became the three newest checks.
 - A full project scan takes well under a second for a typical app.
 
 ---

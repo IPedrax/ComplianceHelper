@@ -53,12 +53,18 @@ Paths are relative to this skill's directory.
 
 2. **Confirm the profile, once per project.** Markets decide which laws apply. If
    `.compliance/profile.json` doesn't exist, ask the user once, alongside your first
-   report rather than before starting: where are the users (EU, UK, US, BR, CA, IN,
-   CN)? Consumers or businesses? Kids? Health, finance, education, government,
-   defense? Write the answers there:
+   report rather than before starting, and write the answers there:
    ```json
-   {"markets": ["BR", "US"], "children": false, "sectors": [], "sells_to": [], "distributed": false}
+   {"markets": ["BR", "EU"], "audience": "consumers", "children": false, "sectors": [], "sells_to": [], "distributed": false}
    ```
+   - `markets`: EU, UK, US, BR, CA, IN, CN. Decides which privacy and consumer laws apply.
+   - `audience`: consumers, business or both. `business` drops consumer-only law (ROSCA,
+     Brazil's CDC, EU consumer rules).
+   - `children`: true when under-13s (under-16s in the EU) may use it.
+   - `sectors`: health, finance, education. Adds HIPAA, GLBA and AML, FERPA.
+   - `sells_to`: government, defense, eu-financial, eu-critical. Adds FedRAMP, CMMC, DORA, NIS2.
+   - `distributed`: true for installable apps, desktop builds and CLIs. Adds the Cyber
+     Resilience Act, and makes GPL dependencies count as distribution.
    Until then the scan assumes EU, UK, US and Brazil (the strictest common baseline)
    and says so in the report.
 
@@ -87,6 +93,8 @@ Paths are relative to this skill's directory.
      for DPAs and the privacy policy.
    - Dependency vulnerabilities: run `npm audit --omit=dev`, `pip-audit` or `osv-scanner`
      if available.
+   - The presence checks are heuristics: a `/privacy` link, a `cookie-banner` string or a
+     package name satisfies them. Confirm the real thing exists and works.
 
 5. **Fix**, following the split below, then re-run `scan.py` until the fixed findings
    are gone.
@@ -96,15 +104,18 @@ Paths are relative to this skill's directory.
 ## Fix yourself, or ask
 
 **Fix without asking** when the fix is mechanical and keeps behavior: moving a secret to
-an env var, failing closed, parameterizing a query, adding headers or cookie flags, alt
-text, `lang`, unchecking a pre-ticked box, adding `.env` to `.gitignore` or
-`.dockerignore`, rate-limiting a paid endpoint, gating tags behind consent state that
-already exists. `references/fixes.md` has the versions that are easy to get subtly wrong.
+an env var, failing closed, parameterizing a query, hashing passwords in new code, adding
+headers or cookie flags, alt text, `lang`, unchecking a pre-ticked box, adding `.env` to
+`.gitignore` or `.dockerignore`, rate-limiting a paid endpoint, gating tags behind consent
+state that already exists. Adding the standard package for one of these (helmet,
+express-rate-limit, argon2) counts as mechanical; name it in the report.
+`references/fixes.md` has the versions that are easy to get subtly wrong.
 
 **Ask first** when the fix changes the product, the law or the money: adding a consent
-banner (it changes the UX), writing a privacy policy or terms (draft it, and label it a
-draft for their review, because it's legal text), removing a feature or a tracker,
-replacing a dependency, picking markets, accepting a risk.
+banner (it changes the UX), removing a feature or a tracker, replacing or removing a
+dependency, picking markets, accepting a risk. Legal text sits in between. Drafting a
+privacy policy or terms needs no permission: write it to a file marked DRAFT and list it
+under "Needs you". Linking it from the product, or calling it final, waits for the user.
 
 **Never do these for the user; tell them instead:** rotating a leaked key (removing it
 from code doesn't revoke it), signing DPAs, registering with regulators, anything that
@@ -142,6 +153,9 @@ ones there still leak.
 
 - **Wrong finding:** add `compliance-ignore: RULE-ID reason` as a comment on the line or
   the line above. Always give the reason.
+- **Wrong project-level finding** (the privacy policy lives on the parent site, say):
+  inline comments can't reach these, so add a waiver whose reason starts with
+  `false positive:` and say so in your report.
 - **Accepted risk** (the user decided): `.compliance/waivers.json`, e.g.
   `[{"rule": "SEC-HASH", "path": "src/coturn.ts", "reason": "TURN spec mandates MD5", "until": "2027-01-01"}]`.
   Waived items stay in the report under "Accepted risks". Only add one on the user's say-so.

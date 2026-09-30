@@ -154,6 +154,13 @@ class LineRules(unittest.TestCase):
         self.hit("A11Y-CLICK", "src/Card.jsx", "<div className=\"card\" onClick={go}>")
         self.miss("A11Y-CLICK", "src/Card.jsx", '<div role="button" tabIndex={0} onClick={go} onKeyDown={key}>')
 
+
+    def test_password_form_get(self):
+        self.hit("SEC-FORM-GET", "login.html", '<form>\n  <input type="password" name="password">\n</form>')
+        self.miss("SEC-FORM-GET", "login.html", '<form method="post"><input type="password" name="password"></form>')
+        self.miss("SEC-FORM-GET", "src/Login.jsx", '<form onSubmit={login}><input type="password" name="pw" /></form>')
+        self.miss("SEC-FORM-GET", "admin.html", '<form id="f"><input type="password" id="senha"></form>')  # no name: never sent
+
     def test_infra_lines(self):
         self.hit("INF-DOCKER-SECRET", "Dockerfile", "FROM node:22\nENV API_KEY=abc123secret\n")
         self.miss("INF-DOCKER-SECRET", "Dockerfile", "FROM node:22\nARG NPM_TOKEN\nRUN npm ci\n")
@@ -226,6 +233,65 @@ class Project(unittest.TestCase):
         for rule in ("PRV-CONSENT", "PRV-NOTICE", "PRV-DELETE", "PRV-EXPORT", "AI-COST", "CON-TERMS", "MKT-SMS",
                      "INF-LOCKFILE"):
             self.assertNotIn(rule, again)
+
+
+    def test_project_finding_survives_line_shifts(self):
+        write(self.root, "index.html", '<html lang="en"><head>'
+                                       '<script async src="https://www.googletagmanager.com/gtag/js?id=G-TEST123"></script>')
+        first = scan.scan_project(self.root)
+        ev = next(f for f in first["findings"] if f["rule"] == "PRV-CONSENT")
+        self.assertIn("G-TEST123", ev["title"])  # evidence keeps its case and isn't cut mid-token
+        write(self.root, "index.html", "\n\n\n" + scan.read(os.path.join(self.root, "index.html")))
+        again = next(f for f in scan.scan_project(self.root)["findings"] if f["rule"] == "PRV-CONSENT")
+        self.assertFalse(again["new"])  # same gap, new line number: not a new finding
+
+    def test_comments_are_not_evidence(self):
+        write(self.root, "package.json", json.dumps({"name": "x", "dependencies": {"express": "^5", "openai": "^5"}}))
+        write(self.root, "server.js", "// TODO: add express-rate-limit before launch\nconst app = express();\n"
+                                      "app.post('/ai', async (req, res) => res.json(await ai.chat.completions.create({})));\n")
+        self.assertIn("AI-COST", self.rules(scan.scan_project(self.root, record=False)))
+
+    def test_password_storage(self):
+        write(self.root, "package.json", json.dumps({"name": "x", "dependencies": {"express": "^5"}}))
+        write(self.root, "server.js", 'app.post("/api/signup", (req, res) => {\n'
+                                      "  const { email, password } = req.body;\n  users.set(email, { password });\n});\n")
+        write(self.root, "src/types.ts", "export interface Login { email: string; password: string }\n")
+        self.assertIn("SEC-PW-STORAGE", self.rules(scan.scan_project(self.root, record=False)))
+        write(self.root, "package.json", json.dumps({"name": "x", "dependencies": {"express": "^5", "bcrypt": "^5"}}))
+        self.assertNotIn("SEC-PW-STORAGE", self.rules(scan.scan_project(self.root, record=False)))
+        write(self.root, "package.json", json.dumps({"name": "x", "dependencies": {"express": "^5", "@supabase/supabase-js": "^2"}}))
+        self.assertNotIn("SEC-PW-STORAGE", self.rules(scan.scan_project(self.root, record=False)))
+
+    def test_client_types_are_not_password_storage(self):
+        write(self.root, "package.json", json.dumps({"name": "x", "dependencies": {"react": "^19"}}))
+        write(self.root, "src/auth.ts", 'export const signIn = (b: { password: string }) => fetch("/api/login", {})\n')
+        self.assertNotIn("SEC-PW-STORAGE", self.rules(scan.scan_project(self.root, record=False)))
+
+    def test_app_security_headers(self):
+        write(self.root, "package.json", json.dumps({"name": "x", "dependencies": {"express": "^5"}}))
+        write(self.root, "server.js", "const app = express();\napp.listen(3000);\n")
+        self.assertIn("INF-HEADERS-APP", self.rules(scan.scan_project(self.root, record=False)))
+        write(self.root, "package.json", json.dumps({"name": "x", "dependencies": {"express": "^5", "helmet": "^8"}}))
+        self.assertNotIn("INF-HEADERS-APP", self.rules(scan.scan_project(self.root, record=False)))
+
+    def test_script_handled_get_form_is_medium(self):
+        write(self.root, "index.html", '<html lang="en"><form id="f"><input type="password" name="pw"></form>'
+                                       '<script src="app.js"></script></html>')
+        write(self.root, "app.js", "document.getElementById('f').addEventListener('submit', (e) => e.preventDefault())\n")
+        sev = [f["severity"] for f in scan.scan_project(self.root, record=False)["findings"] if f["rule"] == "SEC-FORM-GET"]
+        self.assertEqual(sev, ["medium"])
+
+    def test_business_audience_skips_consumer_law(self):
+        write(self.root, "package.json", json.dumps({"name": "x", "dependencies": {"stripe": "^18"}}))
+        write(self.root, "billing.js", "await stripe.subscriptions.create({ customer, items })\n")
+        self.assertIn("CON-CANCEL", self.rules(scan.scan_project(self.root, record=False)))
+        self.assertIn("CON-TERMS", self.rules(scan.scan_project(self.root, record=False)))
+        write(self.root, "trocas.html", "<h1>Trocas e devoluções</h1>")  # how Brazilian stores publish terms of sale
+        self.assertNotIn("CON-TERMS", self.rules(scan.scan_project(self.root, record=False)))
+        write(self.root, ".compliance/profile.json", json.dumps({"audience": "business"}))
+        r = scan.scan_project(self.root, record=False)
+        self.assertNotIn("CON-CANCEL", self.rules(r))
+        self.assertNotIn("ROSCA", {fw["key"] for fw in r["frameworks"]})
 
     def test_new_and_waivers(self):
         write(self.root, "src/Post.tsx", "<div dangerouslySetInnerHTML={{ __html: x }} />")

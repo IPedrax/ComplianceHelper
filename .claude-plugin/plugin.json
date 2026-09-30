@@ -1,6 +1,6 @@
 {
   "name": "compliance",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Keeps every product you build compliant while you build it. Scans the code and the running app for gaps (leaked secrets, injection, trackers before consent, no privacy policy or account deletion, copyleft dependencies, inaccessible markup, unlabeled AI), maps each one to the frameworks it breaks, and re-checks every edit and every finished turn through hooks. Readiness, not certification.",
   "author": {
     "name": "IPedrax",

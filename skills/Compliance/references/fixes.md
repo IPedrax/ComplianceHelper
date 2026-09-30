@@ -17,6 +17,8 @@ scanner's own checks. Adapt names and frameworks to the project. Don't paste bli
 10. nginx headers that survive `location` blocks (INF-NGINX-*)
 11. AI disclosure and labels (AI-DISCLOSE, AI-LABEL)
 12. Ignore files, and checking what actually ships (INF-ENV, INF-DOCKERIGNORE)
+13. Security headers in the app (INF-HEADERS-APP)
+14. Password hashing (SEC-PW-STORAGE)
 
 ## 1. Secrets that fail closed
 
@@ -269,3 +271,47 @@ For anything already live, request the file. A 404 is proof; an assumption isn't
 ```bash
 python3 scripts/app_scan.py https://your-domain.example/
 ```
+
+## 13. Security headers in the app
+
+When no proxy config in the repo sets them, set them in the app. Tune the CSP to what the
+pages load; don't switch it off to make an error go away.
+
+- **Express:** `import helmet from "helmet"; app.use(helmet());`
+- **Fastify:** `import helmet from "@fastify/helmet"; await app.register(helmet);`
+- **Hono:** `import { secureHeaders } from "hono/secure-headers"; app.use(secureHeaders());`
+- **Flask:** `Talisman(app)` from flask-talisman.
+- **FastAPI:** a middleware that sets them on every response:
+
+```python
+@app.middleware("http")
+async def security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers.update({
+        "Strict-Transport-Security": "max-age=63072000; includeSubDomains",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Content-Security-Policy": "frame-ancestors 'none'",
+    })
+    return response
+```
+
+## 14. Password hashing
+
+argon2id through a maintained library. Never a fast hash, never plaintext.
+
+```js
+import argon2 from "argon2";
+const hash = await argon2.hash(password);   // argon2id by default
+const ok = await argon2.verify(hash, attempt);
+```
+
+```python
+from argon2 import PasswordHasher
+ph = PasswordHasher()                        # argon2id with RFC 9106 parameters
+hash = ph.hash(password)
+ph.verify(hash, attempt)                     # raises VerifyMismatchError on a wrong password
+```
+
+An existing app that stored plaintext: hash every stored value in one migration (you have the
+plaintext, so no reset is needed), and if that table could ever have leaked, force resets too.

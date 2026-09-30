@@ -37,8 +37,8 @@ rely on one for a filing.
 ### OWASP Top 10 / ASVS
 - **Applies:** any web or mobile app.
 - **Scanner covers:** injection (SEC-SQLI, SEC-CMDI, SEC-EVAL, SEC-XSS), cryptographic failures
-  (SEC-HASH, SEC-RANDOM, SEC-TLS-OFF), misconfiguration (SEC-DEBUG, SEC-CORS, INF-NGINX-*),
-  authentication failures (SEC-COOKIE and the secret rules).
+  (SEC-HASH, SEC-RANDOM, SEC-TLS-OFF, SEC-PW-STORAGE), misconfiguration (SEC-DEBUG, SEC-CORS,
+  INF-NGINX-*, INF-HEADERS-APP), authentication failures (SEC-COOKIE, SEC-FORM-GET and the secret rules).
 - **Needs a human:** a third-party pentest before launch and yearly after; authorization logic on
   every route (a judgment check in the skill). Google's CASA assessment, required for apps using
   restricted Gmail or Drive scopes, is built on ASVS.
@@ -181,9 +181,11 @@ rely on one for a filing.
   UK illegal-content and children's risk assessments (children's duties, including age assurance,
   apply since July 25, 2025); a DMCA agent registered with the US Copyright Office, renewed every 3 years.
 
-### Accessibility (WCAG 2.2 AA; ADA, Section 508, European Accessibility Act)
+### Accessibility (WCAG 2.2 AA; ADA, Section 508, European Accessibility Act, Brazil's LBI)
 - **Applies:** any UI. The EAA applies since June 28, 2025 to e-commerce, banking, e-books, transport
-  ticketing and more in the EU (micro-enterprises providing services are exempt). US ADA suits cite
+  ticketing and more in the EU (micro-enterprises providing services, meaning under 10 staff and 2M
+  euros or less in turnover, are exempt). Brazil's Lei Brasileira de Inclusão (Lei 13.146/2015,
+  Art. 63) requires accessible sites from companies based or represented in Brazil. US ADA suits cite
   WCAG; federal buyers require Section 508 and a VPAT/ACR.
 - **Scanner covers:** the A11Y rules, plus app_scan's APP-LANG, APP-ALT and APP-ZOOM.
 - **Needs a human:** an automated audit (Lighthouse or axe) plus manual keyboard and screen-reader

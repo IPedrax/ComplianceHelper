@@ -36,7 +36,7 @@ import re
 import subprocess
 import sys
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 SEVERITIES = ("critical", "high", "medium", "low", "info")
 RANK = {s: i for i, s in enumerate(SEVERITIES)}
 STATE_DIR = ".compliance"
@@ -413,13 +413,21 @@ RULES = [
          ["GDPR|GDPR Art. 7", "LGPD|LGPD Art. 8", "CCPA|CPRA regs 7004 (dark patterns)"], types=CODE | MARKUP,
          hint=("checked", "usestate(", "ref("),
          near=c(r"consent|newsletter|marketing|opt.?in|subscribe|promo|offers|terms|privacy|aceit|concord|termos|notifica", I)),
+    Rule("SEC-FORM-GET", "high", "Password form submits with GET (the password lands in the URL)",
+         c(r"""<form\b(?![^>]*\bmethod\s*=\s*\{?\s*["']?post)(?![^>]*(?:\bon[Ss]ubmit|@submit|on:submit|\baction\s*=\s*\{))"""
+           r"""[^>]*>(?:(?!</form>).){0,4000}?<input\b(?=[^>]*\btype\s*=\s*\{?\s*["']password["'])(?=[^>]*\bname\s*=)"""
+           r"""[^>]*>""", I | re.S),
+         'Use method="post" over HTTPS. A GET form puts the password in the URL, where server logs, browser history and '
+         "analytics tools keep it.", ["GDPR|GDPR Art. 32", "OWASP|OWASP A04:2021", "SOC2|SOC 2 CC6.1"], types=MARKUP,
+         hint=("password",), tag=True),
     Rule("A11Y-IMG", "medium", "Image without alt text",
          c(r"<img\b(?![^>]*\balt\s*=)(?![^>]*\{\s*\.\.\.)[^>]*>", I),
          'Add alt text that says what the image shows, or alt="" if it is decorative.', ["A11Y|WCAG 1.1.1"],
          types=MARKUP, hint=("<img",), tag=True, per_file=True),
     Rule("A11Y-LANG", "medium", "Page has no language declared",
          c(r"<html\b(?![^>]*\blang\s*=)[^>]*>", I),
-         'Declare the page language, e.g. <html lang="en">, so screen readers use the right pronunciation.',
+         'Declare the language the page is written in, e.g. <html lang="pt-BR"> or lang="en", so screen readers '
+         'pronounce it correctly.',
          ["A11Y|WCAG 3.1.1"], types=MARKUP, hint=("<html",), tag=True),
     Rule("A11Y-ZOOM", "medium", "Zoom disabled in the viewport",
          c(r"""user-scalable\s*=\s*["']?(?:no|0)\b|maximum-scale\s*=\s*["']?1(?:\.0+)?(?![\d.])|maximumScale\s*:\s*1\b(?!\.)"""
@@ -462,8 +470,8 @@ RULES = [
 SUPPRESS = c(r"compliance-ignore(?!-file)(?::\s*([A-Z0-9-]+(?:\s*,\s*[A-Z0-9-]+)*))?")
 
 
-def finding(rule, sev, title, path, line, snippet, fix, maps):
-    key = re.sub(r"\s+", " ", snippet) or title
+def finding(rule, sev, title, path, line, snippet, fix, maps, key=None):
+    key = key or re.sub(r"\s+", " ", snippet) or title
     fp = hashlib.sha1("{}|{}|{}".format(rule, path, key).encode("utf-8")).hexdigest()[:16]
     return {"rule": rule, "severity": sev, "title": title, "path": path, "line": line, "snippet": snippet,
             "fix": fix, "maps": maps, "fingerprint": fp}
@@ -595,6 +603,12 @@ DEP_FEATURES = {
               "fastapi starlette rails sinatra laravel/framework gin-gonic/gin labstack/echo gofiber/fiber elysia "
               "@trpc/server",
     "ui": "react react-dom vue svelte @angular/core next nuxt astro solid-js preact lit jquery",
+    "managed_auth": "firebase firebase-admin @supabase/supabase-js @supabase/ssr @supabase/auth-helpers-nextjs auth0 "
+                    "@auth0/nextjs-auth0 @auth0/auth0-react @auth0/auth0-spa-js aws-amplify @aws-amplify/auth "
+                    "amazon-cognito-identity-js better-auth keycloak-js next-auth @auth/core supertokens-node magic-sdk "
+                    "supabase auth0-python django fastapi-users flask-security-too devise",
+    "pw_hashing": "bcrypt bcryptjs argon2 @node-rs/argon2 @node-rs/bcrypt argon2-cffi passlib scrypt",
+    "header_mw": "helmet @fastify/helmet koa-helmet flask-talisman secure django",
     "rate_limit": "express-rate-limit rate-limiter-flexible @upstash/ratelimit slowapi flask-limiter django-ratelimit "
                   "fastapi-limiter express-slow-down @fastify/rate-limit hono-rate-limiter limiter "
                   "rack-attack @nestjs/throttler",
@@ -602,7 +616,10 @@ DEP_FEATURES = {
 DEP_FEATURES = {k: set(v.split()) for k, v in DEP_FEATURES.items()}
 DEP_PREFIX = (("@segment/", "analytics"), ("@amplitude/", "analytics"), ("@langchain/", "ai"), ("@ai-sdk/", "ai"),
               ("@clerk/", "accounts"), ("@auth/", "accounts"), ("@paypal/", "payments"), ("@adyen/", "payments"),
-              ("@fal-ai/", "ai_media"), ("@capacitor/", "mobile"), ("@ionic/", "mobile"), ("expo-", "mobile"))
+              ("@fal-ai/", "ai_media"), ("@capacitor/", "mobile"), ("@ionic/", "mobile"), ("expo-", "mobile"),
+              ("@clerk/", "managed_auth"), ("@auth/", "managed_auth"), ("@okta/", "managed_auth"),
+              ("@kinde-oss/", "managed_auth"), ("@stytch/", "managed_auth"), ("@descope/", "managed_auth"),
+              ("@workos-inc/", "managed_auth"), ("@privy-io/", "managed_auth"))
 
 
 def feat(name, lits, pattern=None, flags=I):
@@ -689,7 +706,7 @@ CODE_FEATURES = [
          r"/privacidade\b|datenschutz|pol[ií]tica[-_ ]de[-_ ]privacidad|confidentialit[eé]"),
     feat("terms_page", ["terms", "termos", "condi", "/tos", "agb"],
          r"terms[-_ ]?(?:of[-_ ]?(?:service|use)|and[-_ ]conditions)|/terms\b|/tos\b|termos[-_ ]de[-_ ](?:uso|servi[cç]o)|"
-         r"/termos\b|condi[cç][oõ]es[-_ ]gerais|\bAGB\b"),
+         r"/termos\b|condi[cç][oõ]es[-_ ]gerais|\bAGB\b|pol[ií]tica[-_ ]de[-_ ]trocas|trocas[-_ ]e[-_ ]devolu"),
     feat("deletion", ["delete", "remove", "close", "excluir", "destroy"],
          r"""delete[-_ ]?(?:my[-_ ]?)?account|deleteAccount|delete_account|account/delete|remove[-_ ]?account|close[-_ ]?account"""
          r"""|deleteUser|delete_user|destroyUser|excluir[-_ ]?(?:minha[-_ ]?)?conta|auth\.admin\.deleteUser"""
@@ -705,6 +722,15 @@ CODE_FEATURES = [
          r"[Ss][Mm][Ss][-_ ]?(?:[Cc]onsent|[Oo]pt[-_ ]?[Ii]n)|[Oo]pt[-_ ]?[Ii]n|\bSTOP\b|[Cc]onsent", 0),
     feat("unsubscribe", ["unsubscribe", "list-unsubscribe", "opt-out", "optout", "opt_out", "descadastr",
                          "cancelar inscri"]),
+    feat("password_store", ["password"],
+         r"""(?:req|request)\.(?:body|form|json|get_json\(\))(?:\.|\[["']|\.get\(["'])password|\{[^}\n]*\bpassword\b[^}\n]*\}\s*=\s*"""
+         r"""(?:await\s+)?(?:req|request)\.(?:body|json)|\bpassword\s*(?::\s*str\b|=\s*(?:Column|mapped_column|models\.\w+Field|"""
+         r"""db\.Column|Field)\b)|\bpassword\s*:\s*(?:String\b|\{\s*type\s*:\s*String\b)""", 0),
+    feat("pw_hashing", ["bcrypt", "argon2", "scrypt", "pbkdf2", "passlib", "password_hash(", "make_password", "set_password(",
+                        "generate_password_hash", "hashpw", "has_secure_password", "hashpassword", "hash_password",
+                        "passwordhasher"]),
+    feat("header_code", ["content-security-policy", "x-content-type-options", "strict-transport-security", "helmet(",
+                         "secureheaders", "talisman"]),
     feat("rate_limit_code", ["ratelimit", "rate_limit", "rate-limit", "rate limit", "limit_req", "slowdown", "slow-down"],
          r"rate[-_ ]?limit|\blimit_req\b|express-slow-down|slowDown\s*\("),
     feat("server_code", ["app.listen", "express()", "fastify(", "createserver", "flask(", "fastapi(",
@@ -723,6 +749,22 @@ def _loc(rel, low, i):
     return rel, low.count("\n", 0, i) + 1
 
 
+SLASH_COMMENT = JS | MARKUP | STYLE | {".java", ".kt", ".kts", ".swift", ".cs", ".go", ".rs", ".scala", ".dart", ".php"}
+
+
+def strip_comments(text, kind):
+    """Blank out comments, keeping length and newlines, so a mention in a comment isn't a feature."""
+    blank = lambda m: re.sub(r"[^\n]", " ", m.group(0))
+    if kind in MARKUP:
+        text = re.sub(r"(?s)<!--.*?-->", blank, text)
+    if kind in SLASH_COMMENT:
+        text = re.sub(r"(?s)/\*.*?\*/", blank, text)
+        text = re.sub(r"(?m)(?<![:\"'\w\\])//[^\n]*", blank, text)
+    if kind in HASH_COMMENT:
+        text = re.sub(r"(?m)^[ \t]*#[^\n]*", blank, text)
+    return text
+
+
 def detect(ctx):
     """Map what the code does to features, each with its first piece of evidence (path, line, detail)."""
     found = {}
@@ -737,19 +779,21 @@ def detect(ctx):
     terms = {"health": {}, "education": {}}
     for rel in ctx.texts:
         kind = ftype(rel)
-        if kind not in CODE and kind not in MARKUP:
+        if (kind not in CODE and kind not in MARKUP) or TEST_PATH.search(rel):
             continue
-        low = ctx.low(rel)
+        code = strip_comments(ctx.texts[rel], kind)
+        low = code.lower()
         for name, lits, rx in CODE_FEATURES:
             if name in found or not any(lit in low for lit in lits):
                 continue
             if rx:
-                m = rx.search(ctx.texts[rel])
+                m = rx.search(code)
                 if m:
-                    found[name] = (rel, ctx.texts[rel].count("\n", 0, m.start()) + 1, m.group(0)[:60])
+                    found[name] = (rel, code.count("\n", 0, m.start()) + 1, m.group(0)[:60])
             else:
                 i = min(low.find(lit) for lit in lits if lit in low)
-                found[name] = _loc(rel, low, i) + (low[i:i + 40].split("\n")[0],)
+                token = re.match(r"[^\s\"'<>`]{1,60}", code[i:])
+                found[name] = _loc(rel, low, i) + (token.group(0) if token else low[i:i + 40],)
         if kind in CODE or kind in MARKUP:
             for group, words in (("health", HEALTH_TERMS), ("education", EDU_TERMS)):
                 for w in words:
@@ -764,7 +808,7 @@ def detect(ctx):
         base = low.rsplit("/", 1)[-1]
         if re.search(r"privacy|privacidade|datenschutz|privacidad", low):
             found.setdefault("privacy_page", (rel, 0, "file"))
-        if re.search(r"(^|[/_.-])(terms|termos|tos|agb)([/_.-]|$)", low):
+        if re.search(r"(^|[/_.-])(terms|termos|tos|agb|trocas|devolucoes|devoluções)([/_.-]|$)", low):
             found.setdefault("terms_page", (rel, 0, "file"))
         if base in ("androidmanifest.xml", "info.plist", "pubspec.yaml"):
             found.setdefault("mobile", (rel, 0, "file"))
@@ -869,6 +913,9 @@ class Ctx:
     def market(self, *codes):
         return bool(self.markets & set(codes))
 
+    def consumer(self):
+        return str(self.profile.get("audience", "")).lower() not in ("business", "b2b")
+
     def sells_to(self, what):
         return what in (self.profile.get("sells_to") or [])
 
@@ -899,8 +946,9 @@ PROJECT_RULES = {
                           "An add_header inside a location discards every header inherited from the server block. "
                           "Re-declare the security headers in that location, or move them into a shared include.",
                           MAP_CONFIG),
-    "INF-LOCKFILE": ("low", "Dependencies not pinned by a lockfile",
-                     "Commit a lockfile so every build installs the versions you tested and your SBOM is reproducible.",
+    "INF-LOCKFILE": ("medium", "Dependencies not pinned by a lockfile",
+                     "Commit a lockfile so every build installs the versions you tested. Without one, npm audit can't run "
+                     "and the SBOM isn't reproducible.",
                      ["SSDF|NIST SSDF PS.3", "SOC2|SOC 2 CC8.1", "OWASP|OWASP A08:2021"]),
     "INF-SECTXT": ("low", "No security.txt vulnerability contact",
                    "Publish /.well-known/security.txt (RFC 9116) with a contact address so researchers can report "
@@ -974,6 +1022,15 @@ PROJECT_RULES = {
                   "Every marketing email needs a working unsubscribe honored within 10 business days and a one-click "
                   "List-Unsubscribe header (Gmail and Yahoo bulk-sender rules).",
                   ["MARKETING|CAN-SPAM 15 USC 7704", "MARKETING|CASL s.11", "GDPR|GDPR Art. 21"]),
+    "SEC-PW-STORAGE": ("high", "Password sign-in but no password hashing found",
+                       "Hash passwords with argon2id, scrypt or bcrypt before storing them, or use a managed auth provider. "
+                       "Plaintext passwords turn one database leak into account takeovers everywhere your users reused them.",
+                       ["PCI|PCI DSS 8.3.2", "OWASP|OWASP A02:2021", "GDPR|GDPR Art. 32", "SOC2|SOC 2 CC6.1",
+                        "ISO27001|ISO 27001 A.8.24"]),
+    "INF-HEADERS-APP": ("low", "No security headers set by the app or by a proxy config in this project",
+                        "Set HSTS, CSP, nosniff, frame-ancestors and Referrer-Policy in the app (helmet for Express, "
+                        "@fastify/helmet, Hono's secureHeaders, flask-talisman) or in the proxy in front. Ignore this if a "
+                        "proxy outside the repo already sets them; app_scan.py checks the real response.", MAP_CONFIG),
     "OSS-LICENSE": ("medium", "Dependency license needs review",
                     "Check the obligation before shipping (see the license class in the title).",
                     ["OSS|OpenChain ISO/IEC 5230", "ISO27001|ISO 27001 A.5.32"]),
@@ -1264,7 +1321,7 @@ def project_findings(ctx):
     def add(rid, key=None, detail="", sev=None):
         s, title, fix, maps = PROJECT_RULES[rid]
         path, line, _ = f.get(key, ("", 0, "")) if key else ("", 0, "")
-        out.append(finding(rid, sev or s, title + (": " + detail if detail else ""), path, line, "", fix, maps))
+        out.append(finding(rid, sev or s, title + (": " + detail if detail else ""), path, line, "", fix, maps, key=rid))
 
     trackers = [k for k in ("ads", "analytics") if k in f]
     if trackers and "cmp" not in f and ctx.market("EU", "UK", "BR"):
@@ -1291,9 +1348,16 @@ def project_findings(ctx):
         add("AI-LABEL", "ai_media", ctx.ev("ai_media"))
     if "ai" in f and "server" in f and "rate_limit" not in f:
         add("AI-COST", "ai", ctx.ev("ai"))
-    if "subscriptions" in f and "cancel" not in f:
+    if "password_store" in f and "accounts" in f and not ctx.has("pw_hashing", "managed_auth"):
+        add("SEC-PW-STORAGE", "password_store", ctx.ev("password_store"))
+    web_servers = {"express", "fastify", "koa", "hono", "next", "nuxt", "@sveltejs/kit", "@remix-run/node", "@nestjs/core",
+                   "flask", "fastapi", "starlette"}
+    proxy_headers = any(ftype(r) == ".conf" and "add_header" in t for r, t in ctx.texts.items())
+    if ctx.prod & web_servers and not ctx.has("header_mw", "header_code") and not proxy_headers:
+        add("INF-HEADERS-APP", "server", ctx.ev("server"))
+    if "subscriptions" in f and "cancel" not in f and ctx.consumer():
         add("CON-CANCEL", "subscriptions", ctx.ev("subscriptions"))
-    if ("payments" in f or "subscriptions" in f) and "terms_page" not in f:
+    if ("payments" in f or "subscriptions" in f) and "terms_page" not in f and ctx.consumer():
         add("CON-TERMS", "payments" if "payments" in f else "subscriptions")
     if "ugc" in f and "accounts" in f and "ugc_report" not in f:
         add("PLT-REPORT", "ugc", ctx.ev("ugc"))
@@ -1329,6 +1393,7 @@ FRAMEWORKS = [
         lambda x: "collects personal data: " + x.ev("personal_data"),
         ["Records of processing (Art. 30) and a DPIA for risky processing (Art. 35)",
          "DPAs with every processor and SCCs or the Data Privacy Framework for non-EU ones",
+         "An EU or UK representative if you have no establishment there (Art. 27)",
          "Breach plan: 72 hours to notify the regulator"]),
     _fw("EPRIVACY", "ePrivacy Directive (cookies)", lambda x: x.has("analytics", "ads") and x.market("EU", "UK"),
         lambda x: "sets tracking: " + x.ev("analytics" if x.has("analytics") else "ads"),
@@ -1360,7 +1425,7 @@ FRAMEWORKS = [
         ["Confirm the SAQ type (SAQ A if card data never touches your servers)",
          "Annual self-assessment and Attestation of Compliance"]),
     _fw("CONSUMER", "Online consumer law (Brazil CDC + Decreto 7.962, EU Consumer Rights Directive)",
-        lambda x: x.has("payments", "subscriptions") and x.market("BR", "EU", "UK"),
+        lambda x: x.has("payments", "subscriptions") and x.market("BR", "EU", "UK") and x.consumer(),
         lambda x: "sells online: " + x.ev("payments" if x.has("payments") else "subscriptions"),
         ["Seller identity (CNPJ or company number), address and contact on the site",
          "Withdrawal right for online purchases: 7 days in Brazil (CDC Art. 49), 14 in the EU and UK"]),
@@ -1368,17 +1433,19 @@ FRAMEWORKS = [
         lambda x: "sends marketing messages: " + x.ev("sms" if x.has("sms") else "email_marketing"),
         ["Consent records with timestamp and source for every marketing contact",
          "Physical postal address in every marketing email (CAN-SPAM)"]),
-    _fw("ROSCA", "ROSCA + state auto-renewal laws", lambda x: x.has("subscriptions"),
+    _fw("ROSCA", "ROSCA + state auto-renewal laws", lambda x: x.has("subscriptions") and x.consumer(),
         lambda x: "sells subscriptions: " + x.ev("subscriptions"),
         ["Renewal and price-change notices where state law requires them"]),
     _fw("PLATFORM", "DSA / UK Online Safety Act / DMCA", lambda x: x.has("ugc"),
         lambda x: "hosts user content: " + x.ev("ugc"),
         ["Content rules and moderation explained in the terms; a point of contact (DSA Art. 11 and 12)",
          "UK: illegal-content and children's risk assessments", "DMCA agent registered with the US Copyright Office"]),
-    _fw("A11Y", "Accessibility: WCAG 2.2 AA (ADA, Section 508, European Accessibility Act)",
+    _fw("A11Y", "Accessibility: WCAG 2.2 AA (ADA, Section 508, European Accessibility Act, Brazil's LBI)",
         lambda x: x.has("web_ui", "mobile"), lambda x: "has a user interface",
         ["Automated audit (Lighthouse or axe) plus a manual keyboard and screen-reader pass",
-         "Accessibility statement; a VPAT/ACR for enterprise and government buyers"]),
+         "Accessibility statement; a VPAT/ACR for enterprise and government buyers",
+         "EAA exempts micro-enterprises providing services (under 10 staff, 2M euros or less); Brazil's LBI "
+         "(Lei 13.146/2015, Art. 63) covers sites of companies based or represented in Brazil"]),
     _fw("AIACT", "EU AI Act", lambda x: x.has("ai") and x.market("EU"), lambda x: "uses AI: " + x.ev("ai"),
         ["Classify each AI feature (prohibited, high-risk, limited, minimal); high-risk duties apply from Dec 2, 2027",
          "If you train or fine-tune a general-purpose model: GPAI documentation and a training-data summary"]),
@@ -1477,6 +1544,13 @@ def scan_project(root, out=None, record=True):
             found += scan_text(rel, text, stats=stats)
     ctx = Ctx(root, files, names, texts, profile)
     found += project_findings(ctx)
+    if any(f["rule"] == "SEC-FORM-GET" for f in found) and any(
+            re.search(r"""addEventListener\(\s*["']submit|\.onsubmit\s*=|\.on\(\s*["']submit""", t)
+            for r, t in texts.items() if ftype(r) in JS | MARKUP):
+        for f in found:
+            if f["rule"] == "SEC-FORM-GET" and f["severity"] == "high":
+                f["severity"] = "medium"
+                f["title"] += " (a script handles submit, so GET is the no-JS fallback)"
     today = dt.date.today().isoformat()
     for f in found:
         w = next((w for w in waivers if isinstance(w, dict) and w.get("rule") in (f["rule"], "*") and

@@ -80,7 +80,7 @@ FIX = {
     "APP-TRACKERS": "Load these tags only after opt-in consent (EU, UK, Brazil), or block them with a consent manager until the user accepts.",
     "APP-OPTOUT": 'Link "Do Not Sell or Share My Personal Information" and honor Global Privacy Control by switching ad tags off.',
     "APP-PRIVACY": "Link the privacy policy from every page (the footer is fine) and from every form that collects data.",
-    "APP-LANG": 'Declare the page language, e.g. <html lang="en">, so screen readers use the right pronunciation.',
+    "APP-LANG": 'Declare the language the page is written in, e.g. <html lang="pt-BR"> or lang="en", so screen readers pronounce it correctly.',
     "APP-ALT": 'Give every image alt text, or alt="" when it is decorative.',
     "APP-ZOOM": "Remove user-scalable=no and maximum-scale=1 from the viewport. People with low vision need to zoom.",
     "APP-MIXED": "Load every script, style and image over https://. Mixed content can be tampered with in transit.",
